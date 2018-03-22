@@ -41,7 +41,7 @@ How to make sure external shuffle service is running on every mesos-slave node? 
 Another kiss approach is to install on every mesos-slave machine this service in parallel to mesos-slave agent and manage it with your favorite configuration tool. However, it will couple you to specific spark version and you'll loose abstraction that Mesos cluster provideds. 
 More natural approach is to use [Marathon](https://mesosphere.github.io/marathon/). It has many usecases, however we want ability to run cross-cluster services in HA mode(if some mesos slave will lack external shuffle service - the mesos slave will be useless and all spark tasks will fail). It's "init.d" for cluster services.
 
-We want that external shuffle service will run exactly 1 process(or task in marathon lingua) on every mesos slave. This requirement has 2 faces: given some number of slaves in cluster Marathon, by default, won't promise that every one of them is running given service, it might place 2 processes on the same node; there could be situation that there are no available resources to run the service on some node(e.g. other Mesos framework aka applications took all available resources). For the first problem Marathon provides ability to define service [constraints](http://mesosphere.github.io/marathon/docs/constraints.html) that will make sure that no 2 tasks are running for the same service on the same node(```"constraints": [["hostname", "UNIQUE"]]```). For the second problem I've found that static reservation of resources on Mesos slaves could be in use.
+We want that external shuffle service will run exactly 1 process(or task in marathon lingua) on every mesos slave. This requirement has 2 faces: given some number of slaves in cluster Marathon, by default, won't promise that every one of them is running given service, it might place 2 processes on the same node; there could be situation that there are no available resources to run the service on some node(e.g. other Mesos framework aka applications took all available resources). For the first problem Marathon provides ability to define service [constraints](http://mesosphere.github.io/marathon/docs/constraints.html) that will make sure that no 2 tasks are running for the same service on the same node(```"constraints": [["hostname", "UNIQUE"]]```). For the second problem we've found that static reservation of resources on Mesos slaves could be in use.
    
 ## Mesos slaves reserve resources statically for "shuffle" role
 1. Use [static reservation](http://mesos.apache.org/documentation/latest/reservation/) for the role on every mesos agent, e.g.
@@ -49,6 +49,8 @@ We want that external shuffle service will run exactly 1 process(or task in mara
       --resources=cpus:10;mem:16000;ports:[31000-32000];cpus(shuffle):2;mem(shuffle):2048;ports(shuffle):[7337-7339]
       ```
    1. 31000-32000 is the default port range that mesos agent reports to mesos master
+   1. We are allocating 2g or ram for external shuffle service
+   1. We are allocating ports 7337 to 7339 for external shuffle services(green-blue, different spark versions etc)
    1. The resources might be overprovisioned(e.g. we have 10 cpus on specific machine but still report that all other roles has 10 cpus and 2 cpus specifically for shuffle role)
    1. You will see +2 cpus on every node(but usual frameworks won’t/can’t use those resources)
 1. Start Marathon masters with specific role:
@@ -56,7 +58,8 @@ We want that external shuffle service will run exactly 1 process(or task in mara
 1. Add alert for monitoring Marathon masters
 1. Manage those with configuration service of your choice(chef/puppet/ansible etc)
 
-At this point we've solved two problem, and made sure that no-matter what is resources utilizaiton on some mesos-slave node the external shuffle service will get it's own resources and will run only 1 Marathon task instance on same mesos-slave. 
+At this point we've solved two problem, and made sure that no-matter what is resources utilizaiton on some mesos-slave node the external shuffle service will get it's own resources and will run only 1 Marathon task instance on same mesos-slave for the service. 
+We've started to test dynamic allocation in staging environment and found that after running for 20 or so minutes that tasks start to fail due to missed shuffle files. Seems like there are different corner cases when shuffle files are deleted preliminary.
 
 ## Marathon Service Shuffle files management
 1. The most important thing - don’t delete shuffle files too soon
@@ -64,9 +67,11 @@ At this point we've solved two problem, and made sure that no-matter what is res
    1. Driver must register to all external shuffle services it had executors at
    1. Not always working, and there are similar reports about this as well. Opened SPARK-23286
 1. At the end (even if fixed) not good for our use-case of long running spark services
-   1. Framework “never” ends, so not clear when to remove files
+   1. Framework “never” ends, so it's not clear when to remove files
 1. We'have disabled cleanup by external shuffle service by -Dspark.shuffle.cleaner.interval=31557600
-1. Installed simple cron job on every spark slave that cleans shuffle files that weren't touched more than X hours
+1. Installed simple cron job on every spark slave that cleans shuffle files that weren't touched more than X hours. You need pretty big disks for this to work.
+
+Bottom line here is Marathon service json descriptor for shuffle service that runs on port 7337:
 
 ## Marathon service descriptor
 ```
@@ -101,21 +106,23 @@ curl -v localhost:8080/v2/apps -XPOST -H "Content-Type: application/json" -d'{..
    1. Using Marathon REST-API to find out number of running tasks(instances) of given service
    1. Updating if necessary(both scaling down and scaling up)
 1. Json descriptors are commited to git repo to maintain history
-1. Up-to-dateness are verified by the same script by comparing most important fields in service descriptor and updating if necessary(REST API once again)
+1. Up-to-dateness of other settings is verified by the same script by comparing service descriptor(pulled by Marathon REST-API) and updating if necessary
+
+
 
 ## Spark application config changes
 1. spark.shuffle.service.enabled = true
 1. spark.dynamicAllocation.enabled = true
 1. spark.dynamicAllocation.executorIdleTimeout = 120s 
-   1. when to kill executor
-   1. Low value - fine granularity, but maybe livelocks
-   1. High value - coarse granularity, bad sharing
+   1. when to kill idle executor
+   1. Low value - fine granularity, but may cause livelocks
+   1. High value - coarse granularity, bad sharing of resources, late releases
 1. spark.dynamicAllocation.cachedExecutorIdleTimeout = 120s
    1. infinite by default and may prevent scaling down
-   1. it seems that broadcasted data falls into "cached" category
-1. spark.shuffle.service.port = 7337
-1. spark.dynamicAllocation.minExecutors = 1
-1. spark.scheduler.listenerbus.eventqueue.size = 500000
+   1. it seems that broadcasted data falls into "cached" category, so if you have broadcasts it might also prevent from releasing resources
+1. spark.shuffle.service.port = 7337 - should be sound with port of external shuffle service
+1. spark.dynamicAllocation.minExecutors = 1 - the default is 0
+1. spark.scheduler.listenerbus.eventqueue.size = 500000 - for details see SPARK-21460
 
 ## We still to discover external shuffle service tuning
 1. Some of them available only at spark 2.3 : SPARK-20640
@@ -124,8 +131,8 @@ curl -v localhost:8080/v2/apps -XPOST -H "Content-Type: application/json" -d'{..
 1. spark.shuffle.service.index.cache.entries 
 
 ## Current status: running in production where it makes sense
-1. 4 long running services with some dependency between each other, so 
 
+![Before dynamic allocation](./after.png)
 
 
 
