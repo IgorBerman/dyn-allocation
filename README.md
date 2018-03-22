@@ -109,7 +109,6 @@ curl -v localhost:8080/v2/apps -XPOST -H "Content-Type: application/json" -d'{..
 1. Up-to-dateness of other settings is verified by the same script by comparing service descriptor(pulled by Marathon REST-API) and updating if necessary
 
 
-
 ## Spark application config changes
 1. spark.shuffle.service.enabled = true
 1. spark.dynamicAllocation.enabled = true
@@ -124,15 +123,33 @@ curl -v localhost:8080/v2/apps -XPOST -H "Content-Type: application/json" -d'{..
 1. spark.dynamicAllocation.minExecutors = 1 - the default is 0
 1. spark.scheduler.listenerbus.eventqueue.size = 500000 - for details see SPARK-21460
 
+At this point we started second stage and started to run services with dynamic allocation on in production. After several hours of normal execution we started to notice degradation in those services. Despite Mesos master reporting available resources the frameworks started to get less and less resources from the master.
+After investigations(by debug logs) we have found that frameworks started to decline available resources from the Mesos master. The are two reasons for this: we were running spark executors that were opening jmx port, so while using dynamic allocation same framework got additional offer from same mesos-slave and tried to start executor on the same mesos-slave and failed(due to port collision). Driver started to blacklist mesos-slaves after two such failures. Since in dynamic allocation mode the startups and shutdowns of executors happen constantly, after 8 hours of running approximately 1/3 of mesos-slaves became blacklisted.
+
+## Blacklisting mesos-slave nodes
+1. Spark has blacklisting mechanism that is turned off by default
+1. Spark-Mesos integration has custom blacklisting mechanism with max number of failures == 2
+1. We have implemented custom patch, so that this blacklisting will expire after configured timeout and thus mesos slave will return to the pool of acceptable resources
+1. [We are working on patch to remove the custom blacklisting](https://github.com/apache/spark/pull/20640) mechanism and to use default one(still not merged)
+1. We've removed jmx configuration(and any other port binding) from executors' configuration to reduce number of failures
+
 ## We still to discover external shuffle service tuning
 1. Some of them available only at spark 2.3 : SPARK-20640
 1. spark.shuffle.io.serverThreads
 1. spark.shuffle.io.backLog 
 1. spark.shuffle.service.index.cache.entries 
 
-## Current status: running in production where it makes sense
+## Current status: 
+1. Running in production where it makes sence(e.g. services with some idle times)
+2. We achieved better resources utilization: instead of 4 services we are able to run 5 services on same cluster without degradation in SLA
+3. We reduced a bit end-to-end running times, but due to some data skeweness problems the running times might be dominated by some skewed partition, so we don't have clear picture on that.
 
 ![Before dynamic allocation](./after.png)
+
+## Conclusions:
+1. Dynamic allocation is usefull for better resource utilization
+1. There are still corner cases that might prevent one from using it, especially on Mesos environment
+1. It's not trivial to bootstrap all the infrastructure
 
 
 
