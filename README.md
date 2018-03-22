@@ -63,9 +63,9 @@ We've started to test dynamic allocation in staging environment and found that a
 
 ## Marathon Service Shuffle files management
 1. The most important thing - don’t delete shuffle files too soon
-1. SPARK-12583 - solves problem of removing shuffles files too early by sending heartbeats to every external shuffle service
+1. [SPARK-12583](https://issues.apache.org/jira/browse/SPARK-12583) - solves problem of removing shuffles files too early by sending heartbeats to every external shuffle service
    1. Driver must register to all external shuffle services it had executors at
-   1. Not always working, and there are similar reports about this as well. Opened SPARK-23286
+   1. Not always working, and there are similar reports about this as well. Opened [SPARK-23286](https://issues.apache.org/jira/browse/SPARK-23286)
 1. At the end (even if fixed) not good for our use-case of long running spark services
    1. Framework “never” ends, so it's not clear when to remove files
 1. We'have disabled cleanup by external shuffle service by -Dspark.shuffle.cleaner.interval=31557600
@@ -121,10 +121,11 @@ curl -v localhost:8080/v2/apps -XPOST -H "Content-Type: application/json" -d'{..
    1. it seems that broadcasted data falls into "cached" category, so if you have broadcasts it might also prevent from releasing resources
 1. spark.shuffle.service.port = 7337 - should be sound with port of external shuffle service
 1. spark.dynamicAllocation.minExecutors = 1 - the default is 0
-1. spark.scheduler.listenerbus.eventqueue.size = 500000 - for details see SPARK-21460
+1. spark.scheduler.listenerbus.eventqueue.size = 500000 - for details see [SPARK-21460](https://issues.apache.org/jira/browse/SPARK-21460)
 
-At this point we started to run services with dynamic allocation on in production. After several hours of normal execution we started to notice degradation in those services. Despite the fact that Mesos master was reporting available resources, the frameworks started to get less and less cpus from Mesos master.
-After investigations(by enabling debug logs) we have found that frameworks started to reject resource "offers" from Mesos master. The were two reasons for this: we were running spark executors that were opening jmx port, so while using dynamic allocation same framework got additional offer from the same mesos-slave, tried to start executor on the same mesos-slave and failed(due to port collision). Driver started to blacklist mesos-slaves after only [2 such failures](https://github.com/apache/spark/blob/cfcd746689c2b84824745fa6d327ffb584c7a17d/resource-managers/mesos/src/main/scala/org/apache/spark/scheduler/cluster/mesos/MesosCoarseGrainedSchedulerBackend.scala#L66). Since in dynamic allocation mode the starts and shutdowns of executors happen constantly, after 8 hours of the service running, approximately 1/3 of mesos-slaves became blacklisted for the services.
+At this point we started to run services with dynamic allocation turned "on" in production. 
+We started to notice degradation in those services after several hours of normal execution. Despite the fact that Mesos master was reporting available resources, the frameworks started to get less and less cpus from Mesos master.
+After investigation(by enabling debug logs) we have found that frameworks started to reject resource "offers" from Mesos master. The were two reasons for this: we were running spark executors that were opening jmx port, so while using dynamic allocation same framework got additional offer from the same mesos-slave, tried to start executor on the same mesos-slave and failed(due to port collision). Driver started to blacklist mesos-slaves after only [2 such failures](https://github.com/apache/spark/blob/cfcd746689c2b84824745fa6d327ffb584c7a17d/resource-managers/mesos/src/main/scala/org/apache/spark/scheduler/cluster/mesos/MesosCoarseGrainedSchedulerBackend.scala#L66) without any timeout of blacklisting. Since in dynamic allocation mode the starts and shutdowns of executors happen constantly, after 8 hours of the service running, approximately 1/3 of mesos-slaves became blacklisted for the services.
 
 ## Blacklisting mesos-slave nodes
 1. Spark has blacklisting mechanism that is turned off by default
@@ -134,7 +135,7 @@ After investigations(by enabling debug logs) we have found that frameworks start
 1. We've removed jmx configuration(and any other port binding) from executors' configuration to reduce number of failures
 
 ## We still to discover external shuffle service tuning
-1. Some of them available only at spark 2.3 : SPARK-20640
+1. Some of them available only at spark 2.3 : [SPARK-20640](https://issues.apache.org/jira/browse/SPARK-20956)
 1. spark.shuffle.io.serverThreads
 1. spark.shuffle.io.backLog 
 1. spark.shuffle.service.index.cache.entries 
