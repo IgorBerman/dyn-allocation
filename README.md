@@ -12,6 +12,8 @@ We have long running services that once in a while upon some external trigger st
 
 ![Before dynamic allocation](./before.png)
 
+One can notice that total number of cores taken from Mesos cluster(total_cpus_sum) is contant and stands on 500 cores, while real usage of cpus accross all mesos slaves for the given framework(aka application) stand on 400 cores(let's assume it's due subsampling), but more importantly there are idle times with 0 cpu usage.
+
 So our goal was two fold:
 1. Utilize better available resources
 1. Improve end-to-end processing time
@@ -146,6 +148,8 @@ After investigation(by enabling debug logs) we have found that frameworks starte
 3. We reduced a bit end-to-end running times, but due to some data skeweness problems the running times might be dominated by some skewed partition, so we don't have clear picture on that.
 
 ![Before dynamic allocation](./after.png)
+
+We are able to setup more cores to every service(800 vs 500 cores). The services able to utilize those resources and they are returning those back to Mesos cluster when not in use. Pay attention how total_cpus_sum(the allocation taken from the cluster) follows real_cpus_sum(the actual usage of all slaves)
 
 ## Conclusions:
 1. Dynamic allocation is usefull for better resource utilization
