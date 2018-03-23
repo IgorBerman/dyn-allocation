@@ -92,7 +92,7 @@ We've started to test dynamic allocation in staging environment and found that a
    1. *instances* are dynamically configured
    1. Using Mesos [REST-API](http://mesos.apache.org/documentation/latest/endpoints/master/slaves/) to find out active slaves
    1. Using Marathon REST-API to find out number of running tasks(instances) of the given service
-   ```
+```
 {
   "id": "/shuffle-service-7337",
   "cmd": "spark-2.2.0-bin-hadoop2.7/sbin/start-mesos-shuffle-service.sh",
@@ -114,7 +114,7 @@ We've started to test dynamic allocation in staging environment and found that a
   "portDefinitions": [{"protocol": "tcp", "port": 7337}],
   "requirePorts": true
 }
-   ```
+```
 
 When Marathon is running external shuffle service on all mesos-slave nodes, one can setup spark application to use it.
 
