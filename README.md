@@ -72,9 +72,9 @@ We want that external shuffle service will run exactly 1 process(or task in mara
 1. Add alert for monitoring Marathon masters
 1. Manage those with configuration service of your choice(chef/puppet/ansible etc)
 
-At this point we've solved two problem, and made sure that no-matter what is resources utilizaiton on some mesos-slave node, the external shuffle service will get it's own resources and will run only 1 Marathon task instance on same mesos-slave.
+At this point we've solved two problems, and made sure that no-matter what is resources utilizaiton on some mesos-slave node, the external shuffle service will get it's own resources and will run only 1 Marathon task instance on same mesos-slave.
 
-We've started to test dynamic allocation in staging environment and found that after running for 20 or so minutes the tasks start to fail due to missed shuffle files. Seems like there are different corner cases when shuffle files are deleted preliminary.
+We've started to test dynamic allocation in staging environment and found that after running for 20 or so minutes the tasks started to fail due to missed shuffle files. Seems like there are different corner cases when shuffle files are deleted preliminary.
 
 
 
