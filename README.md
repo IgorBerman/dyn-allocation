@@ -30,6 +30,8 @@ Since we've seen clear idle times, it seemed like perfect usecase for dynamic al
 
 At basic level this is what happening: Spark driver monitors number of pending tasks. When there is no such or number of executors suffies, timeout timer is installed. If it expires, the driver turns off executors on mesos slaves. The only problem with this approach is that killed executors might have produced shuffle files that might be in need by other still-alive executors. To solve this issue, we need external shuffle service that will serve aforementioned shuffle files as a proxy of dead executor.
 
+
+
 ## Basic prerequisites
 1. External Shuffle Service 
    1. Must run on every spark node
@@ -40,6 +42,8 @@ At basic level this is what happening: Spark driver monitors number of pending t
 1. Dynamic Allocation feature flag
    1. spark.dynamicAllocation.enabled = true
 
+
+
 ## How to make sure external shuffle service is running on every mesos-slave node? 
 Spark documentation mentions Marathon as one way to achieve this(without any details). 
 
@@ -49,6 +53,8 @@ More natural approach is to use [Marathon](https://mesosphere.github.io/marathon
 
 We want that external shuffle service will run exactly 1 process(or task in marathon lingua) on every mesos-slave. This requirement has 2 faces: given some number of slaves in cluster, the Marathon, by default, won't promise that every one of them is running given service, it might place 2 processes on the same node, based on available resources on each node; in addition, there could be situations that there are no available resources to run the service on specific node(e.g. other Mesos framework/s took all available resources). For the first problem Marathon provides ability to define service [constraints](http://mesosphere.github.io/marathon/docs/constraints.html) that will make sure that no 2 tasks are running for the same service on the same node(```"constraints": [["hostname", "UNIQUE"]]```). For the second problem we've found that static reservation of resources on mesos-slaves could be in use.
    
+
+
 ## Mesos slaves reserve resources statically for "shuffle" role
 1. We decided that everything connected to external shuffle service will run under "shuffle" role
 1. We will use [static reservation](http://mesos.apache.org/documentation/latest/reservation/) for the role on every mesos agent, e.g.
@@ -70,6 +76,8 @@ At this point we've solved two problem, and made sure that no-matter what is res
 
 We've started to test dynamic allocation in staging environment and found that after running for 20 or so minutes the tasks start to fail due to missed shuffle files. Seems like there are different corner cases when shuffle files are deleted preliminary.
 
+
+
 ## External Shuffle Service and Shuffle files management
 1. The first rule of the external shuffle service - don’t delete shuffle files ... too soon
 1. There are some traces for the problem out there, e.g. [SPARK-12583](https://issues.apache.org/jira/browse/SPARK-12583) - solves problem of removing shuffles files too early by sending heartbeats to every external shuffle service from application.
@@ -79,6 +87,8 @@ We've started to test dynamic allocation in staging environment and found that a
    1. Framework “never” ends, so it's not clear when to remove shuffle files
 1. We'have disabled cleanup by external shuffle service by -Dspark.shuffle.cleaner.interval=31557600
 1. Installed simple cron job on every spark slave that cleans shuffle files that weren't touched more than X hours. You need pretty big disks for this to work to have some buffer.
+
+
 
 
 ## Marathon service descriptor management
@@ -92,7 +102,7 @@ We've started to test dynamic allocation in staging environment and found that a
    1. *instances* are dynamically configured
    1. Using Mesos [REST-API](http://mesos.apache.org/documentation/latest/endpoints/master/slaves/) to find out active slaves
    1. Using Marathon REST-API to find out number of running tasks(instances) of the given service
-```
+   ```
 {
   "id": "/shuffle-service-7337",
   "cmd": "spark-2.2.0-bin-hadoop2.7/sbin/start-mesos-shuffle-service.sh",
@@ -114,7 +124,9 @@ We've started to test dynamic allocation in staging environment and found that a
   "portDefinitions": [{"protocol": "tcp", "port": 7337}],
   "requirePorts": true
 }
-```
+   ```
+
+
 
 When Marathon is running external shuffle service on all mesos-slave nodes, one can setup spark application to use it.
 
