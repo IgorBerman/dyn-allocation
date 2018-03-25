@@ -3,11 +3,11 @@
 ## Environment
 1. Spark v2.2.0
 1. Mesos v1.1.0
-1. Number of cores: thouthands
+1. Number of cores: thousands
 1. Number of Mesos-slave nodes: hundreds
 
-## Terms
-1. In Mesos cluster environment "framework" and "application" are same
+### Terms
+* In Mesos cluster environment "framework" and "application" are same
 
 The story starts from metrics. You need to have some metric system that will show you that you are underutilizing your available resources. 
 In Taboola, we are using Graphana, Metrictank with Kafka based pipeline to collect metrics from several DCs around the world.
@@ -84,10 +84,10 @@ We've started to test dynamic allocation in staging environment and found that a
 ## External Shuffle Service and Shuffle files management
 1. The first rule of the external shuffle service - don’t delete shuffle files ... too soon
 1. There are some traces for the problem out there, e.g. [SPARK-12583](https://issues.apache.org/jira/browse/SPARK-12583) - solves problem of removing shuffles files too early by sending heartbeats to every external shuffle service from application.
-   1. Driver must register to all external shuffle services running on mesos-slave nodes it have executors at
-   1. Despite the complete refactoring of this mechanims, it still not always working. Opened [SPARK-23286](https://issues.apache.org/jira/browse/SPARK-23286)
+   * Driver must register to all external shuffle services running on mesos-slave nodes it have executors at
+   * Despite the complete refactoring of this mechanims, it still not always working. Opened [SPARK-23286](https://issues.apache.org/jira/browse/SPARK-23286)
 1. At the end (even if fixed) it's not good for our use-case of long running spark services
-   1. Framework “never” ends, so it's not clear when to remove shuffle files
+   * Framework “never” ends, so it's not clear when to remove shuffle files
 1. We'have disabled cleanup by external shuffle service by -Dspark.shuffle.cleaner.interval=31557600
 1. Installed simple cron job on every spark slave that cleans shuffle files that weren't touched more than X hours. You need pretty big disks for this to work to have some buffer.
 
@@ -102,9 +102,9 @@ We've started to test dynamic allocation in staging environment and found that a
 1. Json descriptors are commited to git repo to maintain history and are distributed to Marathon master machines
 1. The Marathon leader in quorum runs periodic check for Up-to-dateness settings and updates service descriptor through REST-API if necessary
 1. Here is Marathon service json descriptor for shuffle service that runs on port 7337:
-   1. *instances* are dynamically configured
-   1. Using Mesos [REST-API](http://mesos.apache.org/documentation/latest/endpoints/master/slaves/) to find out active slaves
-   1. Using Marathon REST-API to find out number of running tasks(instances) of the given service
+   * *instances* are dynamically configured
+   * Using Mesos [REST-API](http://mesos.apache.org/documentation/latest/endpoints/master/slaves/) to find out active slaves
+   * Using Marathon REST-API to find out number of running tasks(instances) of the given service
 ```
 {
   "id": "/shuffle-service-7337",
@@ -137,12 +137,12 @@ When Marathon is running external shuffle service on all mesos-slave nodes, one 
 1. spark.shuffle.service.enabled = true
 1. spark.dynamicAllocation.enabled = true
 1. spark.dynamicAllocation.executorIdleTimeout = 120s 
-   1. Defines when to kill idle executor
-   1. Low value - fine granularity, but may cause livelocks
-   1. High value - coarse granularity, bad sharing of resources, late releases
+   * Defines when to kill idle executor
+   * Low value - fine granularity, but may cause livelocks
+   * High value - coarse granularity, bad sharing of resources, late releases
 1. spark.dynamicAllocation.cachedExecutorIdleTimeout = 120s
-   1. infinite by default and may prevent scaling down
-   1. it seems that broadcasted data falls into "cached" category, so if you have broadcasts it might also prevent from releasing resources
+   * infinite by default and may prevent scaling down
+   * it seems that broadcasted data falls into "cached" category, so if you have broadcasts it might also prevent from releasing resources
 1. spark.shuffle.service.port = 7337 - should be sound with port of external shuffle service
 1. spark.dynamicAllocation.minExecutors = 1 - the default is 0
 1. spark.scheduler.listenerbus.eventqueue.size = 500000 - for details see [SPARK-21460](https://issues.apache.org/jira/browse/SPARK-21460)
