@@ -157,7 +157,7 @@ After investigating(by enabling spark debug logs) we have found that frameworks 
 ## Blacklisting mesos-slave nodes
 1. Spark has blacklisting mechanism that is turned off by default
 1. Spark-Mesos integration has custom blacklisting mechanism which is [always on](https://issues.apache.org/jira/browse/SPARK-19755) with max number of failures == 2
-1. We have implemented custom patch, so that this blacklisting will expire after configured timeout and thus Mesos-slave node will return to the pool of valid nodes
+1. We have implemented [custom patch](https://github.com/IgorBerman/spark/commit/8fef020bef46928aa18113dfb73dd8f7fe4c2ba8), so that this blacklisting will expire after configured timeout and thus Mesos-slave node will return to the pool of valid nodes
 1. [We are working on patch to remove the custom blacklisting](https://github.com/apache/spark/pull/20640) mechanism with spark devs community in order to use default blacklisting(still not merged)
 1. We've removed jmx configuration(and any other port binding) from executors' configuration to reduce number of failures
 
