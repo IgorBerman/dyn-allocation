@@ -1,3 +1,4 @@
+This is draft version, subject to changes and pollishing
 # Using Spark Dynamic Allocation on Mesos
 
 ## Environment
